@@ -1117,6 +1117,63 @@ function ShopModule.Init(Tab, lot, GetImageFunc)
             returnRoot.CFrame = RUKIRY_PLAYER_CF
         end
 
+        -- Wait for the Rukiry axe to spawn then pick it up
+        print("[Rukiry] Waiting for axe to spawn...")
+        local axeModel = nil
+        local axeDeadline = tick() + 10
+        while tick() < axeDeadline do
+            task.wait(0.2)
+            local PlayerModels = workspace:FindFirstChild("PlayerModels")
+            if not PlayerModels then continue end
+
+            local char = Player.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+
+            for _, m in ipairs(PlayerModels:GetChildren()) do
+                if not (m:IsA("Model") and m.Name == "Model") then continue end
+
+                -- Check ToolName == "Rukiryaxe"
+                local toolName = m:FindFirstChild("ToolName")
+                if not (toolName and toolName.Value == "Rukiryaxe") then continue end
+
+                -- Check Owner.OwnerString == Player.Name
+                local ownerFolder = m:FindFirstChild("Owner")
+                local ownerString = ownerFolder and ownerFolder:FindFirstChild("OwnerString")
+                if not (ownerString and ownerString.Value == Player.Name) then continue end
+
+                -- Check Owner.LastInteracted == 0
+                local lastInteracted = ownerFolder and ownerFolder:FindFirstChild("LastInteracted")
+                if not (lastInteracted and lastInteracted.Value == 0) then continue end
+
+                -- Check within 50 studs of player
+                if root then
+                    local handle = m:FindFirstChild("Handle") or m.PrimaryPart
+                    if handle then
+                        local dist = (handle.Position - root.Position).Magnitude
+                        if dist > 50 then continue end
+                    end
+                end
+
+                axeModel = m
+                break
+            end
+
+            if axeModel then break end
+        end
+
+        if axeModel then
+            local handle = axeModel:FindFirstChild("Handle") or axeModel.PrimaryPart
+            if handle then
+                print("[Rukiry] Found axe, picking up...")
+                Interact:FireServer(axeModel, "Pick up tool", handle.CFrame)
+                print("[Rukiry] Axe picked up!")
+            else
+                warn("[Rukiry] Axe found but no Handle/PrimaryPart")
+            end
+        else
+            warn("[Rukiry] Axe did not spawn within timeout")
+        end
+
         print("[Rukiry] Done!")
         _isBuyingRukiry = false
         RukiryBtn:SetText("$7,400")
