@@ -1,7 +1,7 @@
 local User = "learnhtsd"
 local Repo = "DynxeLT2"
 local Branch = "main"
-local Version = "v12 - dev branch"
+local Version = "v13 - dev branch"
 
 task.spawn(function()
     local ICON_FOLDER  = "DynxeLT2"
