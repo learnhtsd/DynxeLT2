@@ -868,15 +868,28 @@ function ShopModule.Init(Tab, lot, GetImageFunc)
     end
 
     local function CheckAllBlueprintsOwned()
-        local blueprintsFolder = Player:FindFirstChild("PlayerBlueprints")
-            and Player.PlayerBlueprints:FindFirstChild("Blueprints")
-        if not blueprintsFolder then return false end
+        if #BlueprintItems == 0 then
+            print("[Blueprints] BlueprintItems is empty — returning false")
+            return false
+        end
+        local playerBP = Player:FindFirstChild("PlayerBlueprints")
+        if not playerBP then
+            print("[Blueprints] No PlayerBlueprints folder found — returning false")
+            return false
+        end
+        local blueprintsFolder = playerBP:FindFirstChild("Blueprints")
+        if not blueprintsFolder then
+            print("[Blueprints] No Blueprints subfolder found — returning false")
+            return false
+        end
+        local owned, total = 0, #BlueprintItems
         for _, item in ipairs(BlueprintItems) do
-            if not blueprintsFolder:FindFirstChild(item.BoxItemName) then
-                return false
+            if blueprintsFolder:FindFirstChild(item.BoxItemName) then
+                owned += 1
             end
         end
-        return true
+        print(("[Blueprints] Owned %d / %d"):format(owned, total))
+        return owned >= total
     end
 
     local BlueprintBtn
@@ -911,11 +924,14 @@ function ShopModule.Init(Tab, lot, GetImageFunc)
     -- Initial state check on load
     UpdateBlueprintBtnState()
 
-    -- Watch for new blueprints being added in real time
+    -- Watch for blueprints being added OR removed (e.g. slot swap clears the folder)
     local bpFolder = Player:FindFirstChild("PlayerBlueprints")
         and Player.PlayerBlueprints:FindFirstChild("Blueprints")
     if bpFolder then
         bpFolder.ChildAdded:Connect(function()
+            UpdateBlueprintBtnState()
+        end)
+        bpFolder.ChildRemoved:Connect(function()
             UpdateBlueprintBtnState()
         end)
     end
