@@ -1,7 +1,7 @@
 local User = "learnhtsd"
 local Repo = "DynxeLT2"
 local Branch = "main"
-local Version = "v3 - dev branch"
+local Version = "v4 - dev branch"
 
 task.spawn(function()
     local ICON_FOLDER  = "DynxeLT2"
@@ -239,7 +239,7 @@ function Library:CreateWindow()
     HeaderTitle.Size               = UDim2.new(1, -(W.SidebarWidth + 25), 0, 30)
     HeaderTitle.Position           = UDim2.new(0, W.SidebarWidth + 15, 0, 10)
     HeaderTitle.BackgroundTransparency = 1
-    HeaderTitle.Text               = "<b>Dynxe</b> <font color=\"#4a78ff\">LT2</font> <font color=\"#555555\" size=\"" .. FS(12) .. "\">" .. Version .. "</font>"
+    HeaderTitle.Text               = "<b>Dynxe</b> <font color=\"#FF0000\">LT2</font> <font color=\"#555555\" size=\"" .. FS(12) .. "\">" .. Version .. "</font>"
     HeaderTitle.RichText           = true
     HeaderTitle.TextColor3         = T.TextWhite
     HeaderTitle.Font               = Enum.Font.GothamMedium
