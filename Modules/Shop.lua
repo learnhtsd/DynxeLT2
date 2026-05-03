@@ -1057,9 +1057,13 @@ function ShopModule.Init(Tab, lot, GetImageFunc)
         return purchased
     end
 
-    local function RunRukiryLoop()
+local function RunRukiryLoop()
         _isBuyingRukiry = true
         FetchNPCIDs()
+
+        local returnChar = Player.Character
+        local returnRoot = returnChar and returnChar:FindFirstChild("HumanoidRootPart")
+        local rukiryReturnCF = returnRoot and returnRoot.CFrame
 
         for _, rukiryItem in ipairs(RUKIRY_ITEMS) do
             if not _isBuyingRukiry then break end
@@ -1167,10 +1171,18 @@ function ShopModule.Init(Tab, lot, GetImageFunc)
                 print("[Rukiry] Found axe, teleporting down 1 stud...")
                 _LOT.TeleportMany({ { target = handle, goalCF = handle.CFrame * CFrame.new(0, -1, 0) } })
                 if _LOT.IsBusy() then _LOT.WaitForBatch() end
-                task.wait(0.2)
+                task.wait(0.1)
                 print("[Rukiry] Picking up axe...")
+                
                 Interact:FireServer(axeModel, "Pick up tool", handle.CFrame)
                 print("[Rukiry] Axe picked up!")
+                task.wait(0.1)
+                local retChar = Player.Character
+                local retRoot = retChar and retChar:FindFirstChild("HumanoidRootPart")
+                if retRoot and rukiryReturnCF then
+                    retRoot.CFrame = rukiryReturnCF
+                    print("[Rukiry] Returned to original position.")
+                end
             else
                 warn("[Rukiry] Axe found but no Handle/PrimaryPart")
             end
