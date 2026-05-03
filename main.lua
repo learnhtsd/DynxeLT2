@@ -1,7 +1,7 @@
 local User = "learnhtsd"
 local Repo = "DynxeLT2"
 local Branch = "main"
-local Version = "v3"
+local Version = "v3 - dev branch"
 
 task.spawn(function()
     local ICON_FOLDER  = "DynxeLT2"
@@ -52,7 +52,7 @@ local Config = {
         Scale = 0.80,
     },
     Theme = { -- Theme Color Pallet
-        Accent          = Color3.fromRGB(74,  120, 255),  -- blue highlights / active
+        Accent          = Color3.fromRGB(255,  120, 74),  -- blue highlights / active
         Background      = Color3.fromRGB(18,  18,  22),   -- main window background
         Surface         = Color3.fromRGB(24,  24,  29),   -- element cards / dropdowns
         SurfaceDeep     = Color3.fromRGB(35,  35,  42),   -- inset areas / track bg
