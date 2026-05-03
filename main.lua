@@ -1,7 +1,7 @@
 local User = "learnhtsd"
 local Repo = "DynxeLT2"
 local Branch = "main"
-local Version = "v9 - dev branch"
+local Version = "v10 - dev branch"
 
 task.spawn(function()
     local ICON_FOLDER  = "DynxeLT2"
@@ -1952,6 +1952,7 @@ end
 -- ============================================================
 local HubWindow = Library:CreateWindow()
 
+local TeleportTab        = HubWindow:CreateTab("Teleport")
 local ShopTab        = HubWindow:CreateTab("Shop")
 local ToolTab        = HubWindow:CreateTab("Tool")
 
@@ -1969,6 +1970,10 @@ end
 local Theme = loadstring(game:HttpGet(
     "https://raw.githubusercontent.com/learnhtsd/lt2/refs/heads/main/Theme.lua"
 ))()
+
+local TeleportModule = LoadModule("Teleport")
+if TeleportModule and TeleportModule.Init then TeleportModule.Init(TeleportTab, Library) end
+Library:Notify("Loaded", "Teleport", 2)
 
 local LooseObjectTeleportModule = LoadModule("LooseObjectTeleport")
 if LooseObjectTeleportModule and LooseObjectTeleportModule.Init then LooseObjectTeleportModule.Init(ToolTab, Library) end
