@@ -802,8 +802,10 @@ function ShopModule.Init(Tab, lot, GetImageFunc)
     end)
 
     for _, item in pairs(ShopItems) do
-        local img = GetImage("", item.Image)
-        Catalog:AddSlot(img, item.Name, "$" .. tostring(item.Price))
+        pcall(function()
+            local img = GetImage("", item.Image)
+            Catalog:AddSlot(img, item.Name, "$" .. tostring(item.Price))
+        end)
     end
 
     Tab:CreateSlider("Quantity", 1, 100, 1, function(val)
@@ -993,6 +995,16 @@ function ShopModule.Init(Tab, lot, GetImageFunc)
 
         if purchased then
             task.wait(0.05)
+            -- Open the box before TPing
+            local boxModel = mainPart and mainPart.Parent
+            if boxModel and boxModel:IsA("Model") then
+                local char = Player.Character
+                local head = char and char:FindFirstChild("Head")
+                if head then
+                    Interact:FireServer(boxModel, "Open box", head.CFrame)
+                    task.wait(0.5) -- let the box open before TPing
+                end
+            end
             -- TP item to its specific goal position, not back to lot
             if mainPart and mainPart.Parent then
                 _LOT.TeleportMany({ { target = mainPart, goalCF = goalCF } })
