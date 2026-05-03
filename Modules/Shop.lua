@@ -670,7 +670,7 @@ local function RunBlueprintLoop(ShopItems, onDone)
     -- Collect all blueprint items from the item list
     local blueprints = {}
     for _, item in ipairs(ShopItems) do
-        if item.Type == "Blueprint" then
+        if item.Name:find("Blueprint") then
             table.insert(blueprints, item)
         end
     end
