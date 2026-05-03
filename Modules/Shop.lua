@@ -995,20 +995,62 @@ function ShopModule.Init(Tab, lot, GetImageFunc)
 
         if purchased then
             task.wait(0.05)
-            -- Open the box before TPing
+
+            -- Snapshot existing models in PlayerModels before opening
+            local PlayerModels = workspace:FindFirstChild("PlayerModels")
+            local existingModels = {}
+            if PlayerModels then
+                for _, m in ipairs(PlayerModels:GetChildren()) do
+                    existingModels[m] = true
+                end
+            end
+
+            -- Open the box
             local boxModel = mainPart and mainPart.Parent
             if boxModel and boxModel:IsA("Model") then
                 local char = Player.Character
                 local head = char and char:FindFirstChild("Head")
                 if head then
                     Interact:FireServer(boxModel, "Open box", head.CFrame)
-                    task.wait(0.5) -- let the box open before TPing
                 end
             end
-            -- TP item to its specific goal position, not back to lot
-            if mainPart and mainPart.Parent then
-                _LOT.TeleportMany({ { target = mainPart, goalCF = goalCF } })
+
+            -- Wait for the spawned item to appear (it's a new model in PlayerModels)
+            local spawnedPart = nil
+            local deadline = tick() + 5
+            while tick() < deadline do
+                task.wait(0.1)
+                if PlayerModels then
+                    for _, m in ipairs(PlayerModels:GetChildren()) do
+                        if not existingModels[m] and m:IsA("Model") then
+                            -- Match by ItemName value == BoxItemName
+                            local itemNameVal = m:FindFirstChild("ItemName")
+                            if not (itemNameVal and itemNameVal.Value == item.BoxItemName) then
+                                continue
+                            end
+                            -- Confirm ownership via Owner.OwnerString
+                            local ownerFolder = m:FindFirstChild("Owner")
+                            local ownerString = ownerFolder and ownerFolder:FindFirstChild("OwnerString")
+                            if not (ownerString and ownerString.Value == Player.Name) then
+                                continue
+                            end
+                            local foundMain = m:FindFirstChild("Main")
+                            if foundMain then
+                                spawnedPart = foundMain
+                                break
+                            end
+                        end
+                    end
+                end
+                if spawnedPart then break end
+            end
+
+            -- TP the newly spawned item to the goal position
+            if spawnedPart and spawnedPart.Parent then
+                _LOT.TeleportMany({ { target = spawnedPart, goalCF = goalCF } })
                 if _LOT.IsBusy() then _LOT.WaitForBatch() end
+            else
+                warn("[Rukiry] Could not find spawned item after box open")
             end
         end
 
