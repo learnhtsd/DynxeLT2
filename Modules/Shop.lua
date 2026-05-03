@@ -949,6 +949,136 @@ function ShopModule.Init(Tab, lot, GetImageFunc)
     -- Initial state check on load
     UpdateBlueprintBtnState()
 
+    -- ── NEW: Purchase Rukiry Axe ──────────────────────────────────────
+    local RUKIRY_ITEMS = {
+        {
+            BoxItemName = "CanOfWorms",
+            GoalCF      = CFrame.new(317.3, 46.0, 1918.1),
+        },
+        {
+            BoxItemName = "BagOfSand",
+            GoalCF      = CFrame.new(319.5, 46.0, 1914.9),
+        },
+        {
+            BoxItemName = "LightBulb",
+            GoalCF      = CFrame.new(322.1, 46.0, 1916.3),
+        },
+    }
+    local RUKIRY_PLAYER_CF = CFrame.new(320.6, 45.8, 1919.2)
+
+    local RukiryBtn
+    local _isBuyingRukiry = false
+
+    local function PurchaseRukiryItem(mainPart, item, goalCF)
+        local storeName = item.Store
+        local config    = StoreConfigs[storeName]
+        if not config then return false end
+
+        -- TP item to store drop zone
+        local success = _LOT.TeleportMany({ { target = mainPart, goalCF = config.ItemDropCF } })
+        if _LOT.IsBusy() then _LOT.WaitForBatch() end
+        if not success then return false end
+
+        -- TP player to store counter
+        local char = Player.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if not root then return false end
+        root.CFrame = config.PlayerBuyCF
+        task.wait(0.1)
+
+        local npcArg = GetNPCArgForStore(storeName)
+        if not npcArg or not npcArg.ID then return false end
+
+        local purchased = SpamPurchase(mainPart, npcArg, item.Name)
+
+        if purchased then
+            task.wait(0.05)
+            -- TP item to its specific goal position, not back to lot
+            if mainPart and mainPart.Parent then
+                _LOT.TeleportMany({ { target = mainPart, goalCF = goalCF } })
+                if _LOT.IsBusy() then _LOT.WaitForBatch() end
+            end
+        end
+
+        return purchased
+    end
+
+    local function RunRukiryLoop()
+        _isBuyingRukiry = true
+        FetchNPCIDs()
+
+        for _, rukiryItem in ipairs(RUKIRY_ITEMS) do
+            if not _isBuyingRukiry then break end
+
+            -- Find matching item in ShopItems
+            local itemDef = nil
+            for _, shopItem in ipairs(ShopItems) do
+                if shopItem.BoxItemName == rukiryItem.BoxItemName then
+                    itemDef = shopItem
+                    break
+                end
+            end
+
+            if not itemDef then
+                warn("[Rukiry] Item not found in list:", rukiryItem.BoxItemName)
+                continue
+            end
+
+            -- Check funds
+            local funds = FetchFunds()
+            if funds == nil or funds < itemDef.Price then
+                warn("[Rukiry] Not enough funds for:", itemDef.Name, "(need $" .. itemDef.Price .. ")")
+                continue
+            end
+
+            -- Find part in world
+            local parts = ResolveItemParts(itemDef, 1)
+            if #parts == 0 then
+                warn("[Rukiry] No stock found for:", itemDef.Name)
+                continue
+            end
+
+            local mainPart = parts[1]
+            if not mainPart or not mainPart.Parent then
+                warn("[Rukiry] mainPart gone for:", itemDef.Name)
+                continue
+            end
+
+            print("[Rukiry] Purchasing:", itemDef.Name)
+            local purchased = PurchaseRukiryItem(mainPart, itemDef, rukiryItem.GoalCF)
+
+            if purchased then
+                print("[Rukiry] Placed:", itemDef.Name)
+            else
+                warn("[Rukiry] Failed:", itemDef.Name)
+            end
+
+            task.wait(0.2)
+        end
+
+        -- TP player to final position
+        local returnChar = Player.Character
+        local returnRoot = returnChar and returnChar:FindFirstChild("HumanoidRootPart")
+        if returnRoot then
+            returnRoot.CFrame = RUKIRY_PLAYER_CF
+        end
+
+        print("[Rukiry] Done!")
+        _isBuyingRukiry = false
+        RukiryBtn:SetText("$7,400")
+    end
+
+    RukiryBtn = Tab:CreateAction("Purchase Rukiry Axe", "$7,400", function()
+        if _isBuyingRukiry then
+            _isBuyingRukiry = false
+            RukiryBtn:SetText("$7,400")
+            return
+        end
+
+        RukiryBtn:SetText("Stop")
+        task.spawn(RunRukiryLoop)
+    end, false)
+
     -- Watch for blueprints being added OR removed (e.g. slot swap clears the folder)
     local bpFolder = Player:FindFirstChild("PlayerBlueprints")
         and Player.PlayerBlueprints:FindFirstChild("Blueprints")
