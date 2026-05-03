@@ -901,15 +901,33 @@ function ShopModule.Init(Tab, lot, GetImageFunc)
 
     local BlueprintBtn
 
+    local function GetTotalBlueprintCost()
+        local blueprintsFolder = Player:FindFirstChild("PlayerBlueprints")
+            and Player.PlayerBlueprints:FindFirstChild("Blueprints")
+        local total = 0
+        for _, item in ipairs(BlueprintItems) do
+            local owned = blueprintsFolder and blueprintsFolder:FindFirstChild(item.BoxItemName)
+            if not owned then
+                total += item.Price
+            end
+        end
+        return total
+    end
+
     local function UpdateBlueprintBtnState()
         if not BlueprintBtn then return end
         if _isBuyingBlueprints then return end -- don't override Stop state
         local allOwned = CheckAllBlueprintsOwned()
         BlueprintBtn:SetDisabled(allOwned)
-        BlueprintBtn:SetText(allOwned and "All Owned" or "Buy")
+        if allOwned then
+            BlueprintBtn:SetText("All Owned")
+        else
+            local total = GetTotalBlueprintCost()
+            BlueprintBtn:SetText("$" .. tostring(total))
+        end
     end
 
-    BlueprintBtn = Tab:CreateAction("Purchase All Blueprints ($4,950)", "Buy", function()
+    BlueprintBtn = Tab:CreateAction("Purchase All Blueprints", "Buy", function()
 
         -- Toggle stop if already running
         if _isBuyingBlueprints then
