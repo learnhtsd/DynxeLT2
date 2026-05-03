@@ -716,6 +716,13 @@ local function RunBlueprintLoop(ShopItems, onDone)
             continue
         end
 
+        -- Check funds before attempting purchase
+        local funds = FetchFunds()
+        if funds == nil or funds < item.Price then
+            warn("[Blueprints] Not enough funds for:", item.Name, "(need $" .. item.Price .. ")")
+            continue
+        end
+
         print("[Blueprints] Purchasing:", item.Name)
         local purchased = PurchaseBlueprintPart(mainPart, item)
 
@@ -902,7 +909,7 @@ function ShopModule.Init(Tab, lot, GetImageFunc)
         BlueprintBtn:SetText(allOwned and "All Owned" or "Buy")
     end
 
-    BlueprintBtn = Tab:CreateAction("Purchase All Blueprints ($0)", "Buy", function()
+    BlueprintBtn = Tab:CreateAction("Purchase All Blueprints ($4,950)", "Buy", function()
 
         -- Toggle stop if already running
         if _isBuyingBlueprints then
