@@ -858,13 +858,43 @@ function ShopModule.Init(Tab, lot, GetImageFunc)
     end, false)
 
     -- ── NEW: Purchase All Blueprints ─────────────────────────────────
+
+    -- Collect blueprint items from the loaded list
+    local BlueprintItems = {}
+    for _, item in ipairs(ShopItems) do
+        if item.Name:find("Blueprint") then
+            table.insert(BlueprintItems, item)
+        end
+    end
+
+    local function CheckAllBlueprintsOwned()
+        local blueprintsFolder = Player:FindFirstChild("PlayerBlueprints")
+            and Player.PlayerBlueprints:FindFirstChild("Blueprints")
+        if not blueprintsFolder then return false end
+        for _, item in ipairs(BlueprintItems) do
+            if not blueprintsFolder:FindFirstChild(item.BoxItemName) then
+                return false
+            end
+        end
+        return true
+    end
+
     local BlueprintBtn
+
+    local function UpdateBlueprintBtnState()
+        if not BlueprintBtn then return end
+        if _isBuyingBlueprints then return end -- don't override Stop state
+        local allOwned = CheckAllBlueprintsOwned()
+        BlueprintBtn:SetDisabled(allOwned)
+        BlueprintBtn:SetText(allOwned and "All Owned" or "Buy")
+    end
+
     BlueprintBtn = Tab:CreateAction("Purchase All Blueprints ($0)", "Buy", function()
 
         -- Toggle stop if already running
         if _isBuyingBlueprints then
             _isBuyingBlueprints = false
-            BlueprintBtn:SetText("Buy")
+            UpdateBlueprintBtnState()
             return
         end
 
@@ -872,11 +902,23 @@ function ShopModule.Init(Tab, lot, GetImageFunc)
 
         task.spawn(function()
             RunBlueprintLoop(ShopItems, function()
-                BlueprintBtn:SetText("Buy")
+                UpdateBlueprintBtnState()
             end)
         end)
 
     end, false)
+
+    -- Initial state check on load
+    UpdateBlueprintBtnState()
+
+    -- Watch for new blueprints being added in real time
+    local bpFolder = Player:FindFirstChild("PlayerBlueprints")
+        and Player.PlayerBlueprints:FindFirstChild("Blueprints")
+    if bpFolder then
+        bpFolder.ChildAdded:Connect(function()
+            UpdateBlueprintBtnState()
+        end)
+    end
 end
 
 return ShopModule
