@@ -963,7 +963,7 @@ function ShopModule.Init(Tab, lot, GetImageFunc)
         },
         {
             BoxItemName = "LightBulb",
-            GoalCF      = CFrame.new(322.1, 46.0, 1916.3),
+            GoalCF      = CFrame.new(322.1, 46.0, 1917.5),
         },
     }
     local RUKIRY_PLAYER_CF = CFrame.new(320.6, 45.8, 1919.2)
@@ -1120,7 +1120,7 @@ function ShopModule.Init(Tab, lot, GetImageFunc)
         -- Wait for the Rukiry axe to spawn then pick it up
         print("[Rukiry] Waiting for axe to spawn...")
         local axeModel = nil
-        local axeDeadline = tick() + 10
+        local axeDeadline = tick() + 20
         while tick() < axeDeadline do
             task.wait(0.2)
             local PlayerModels = workspace:FindFirstChild("PlayerModels")
@@ -1136,10 +1136,10 @@ function ShopModule.Init(Tab, lot, GetImageFunc)
                 local toolName = m:FindFirstChild("ToolName")
                 if not (toolName and toolName.Value == "Rukiryaxe") then continue end
 
-                -- Check Owner.OwnerString == Player.Name
+                -- Check Owner.OwnerString is blank
                 local ownerFolder = m:FindFirstChild("Owner")
                 local ownerString = ownerFolder and ownerFolder:FindFirstChild("OwnerString")
-                if not (ownerString and ownerString.Value == Player.Name) then continue end
+                if not (ownerString and ownerString.Value == "") then continue end
 
                 -- Check Owner.LastInteracted == 0
                 local lastInteracted = ownerFolder and ownerFolder:FindFirstChild("LastInteracted")
