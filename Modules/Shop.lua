@@ -1164,7 +1164,11 @@ function ShopModule.Init(Tab, lot, GetImageFunc)
         if axeModel then
             local handle = axeModel:FindFirstChild("Handle") or axeModel.PrimaryPart
             if handle then
-                print("[Rukiry] Found axe, picking up...")
+                print("[Rukiry] Found axe, teleporting down 1 stud...")
+                _LOT.TeleportMany({ { target = handle, goalCF = handle.CFrame * CFrame.new(0, -1, 0) } })
+                if _LOT.IsBusy() then _LOT.WaitForBatch() end
+                task.wait(0.2)
+                print("[Rukiry] Picking up axe...")
                 Interact:FireServer(axeModel, "Pick up tool", handle.CFrame)
                 print("[Rukiry] Axe picked up!")
             else
