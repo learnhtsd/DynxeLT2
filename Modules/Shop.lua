@@ -708,6 +708,14 @@ local function RunBlueprintLoop(ShopItems, onDone)
             continue
         end
 
+        -- Skip if player already owns this blueprint
+        local blueprintsFolder = Player:FindFirstChild("PlayerBlueprints")
+            and Player.PlayerBlueprints:FindFirstChild("Blueprints")
+        if blueprintsFolder and blueprintsFolder:FindFirstChild(item.BoxItemName) then
+            print("[Blueprints] Already owned, skipping:", item.Name)
+            continue
+        end
+
         print("[Blueprints] Purchasing:", item.Name)
         local purchased = PurchaseBlueprintPart(mainPart, item)
 
