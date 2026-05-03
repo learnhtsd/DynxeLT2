@@ -1141,9 +1141,9 @@ function ShopModule.Init(Tab, lot, GetImageFunc)
                 local ownerString = ownerFolder and ownerFolder:FindFirstChild("OwnerString")
                 if not (ownerString and ownerString.Value == "") then continue end
 
-                -- Check Owner.LastInteracted == 0
-                local lastInteracted = ownerFolder and ownerFolder:FindFirstChild("LastInteracted")
-                if not (lastInteracted and lastInteracted.Value == 0) then continue end
+                -- Check Owner.LastInteraction == 0
+                local lastInteraction = ownerFolder and ownerFolder:FindFirstChild("LastInteraction")
+                if not (lastInteraction and lastInteraction.Value == 0) then continue end
 
                 -- Check within 50 studs of player
                 if root then
