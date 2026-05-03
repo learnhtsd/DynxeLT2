@@ -604,7 +604,14 @@ local function PurchaseBlueprintPart(mainPart, item)
     local config    = StoreConfigs[storeName]
     if not config then return false end
 
-    -- Just TP the player to the store counter, no item teleport
+    -- TP the item to the store drop position so the server accepts the purchase
+    local success = _LOT.TeleportMany({ { target = mainPart, goalCF = config.ItemDropCF } })
+    if _LOT.IsBusy() then
+        success = _LOT.WaitForBatch()
+    end
+    if not success then return false end
+
+    -- TP player to the buy counter
     local char = Player.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
     if not root then return false end
@@ -615,6 +622,7 @@ local function PurchaseBlueprintPart(mainPart, item)
     local npcArg = GetNPCArgForStore(storeName)
     if not npcArg or not npcArg.ID then return false end
 
+    -- Purchase — intentionally no return TP after, blueprint box goes to PlayerModels
     return SpamPurchase(mainPart, npcArg, item.Name)
 end
 
