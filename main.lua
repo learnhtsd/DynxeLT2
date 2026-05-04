@@ -1,7 +1,7 @@
 local User = "learnhtsd"
 local Repo = "DynxeLT2"
 local Branch = "main"
-local Version = "v18 - dev branch"
+local Version = "v19 - dev branch"
 
 task.spawn(function()
     local ICON_FOLDER  = "DynxeLT2"
@@ -1955,6 +1955,7 @@ local HubWindow = Library:CreateWindow()
 local TeleportTab        = HubWindow:CreateTab("Teleport")
 local ShopTab        = HubWindow:CreateTab("Shop")
 local ToolTab        = HubWindow:CreateTab("Tool")
+local DuplicateTab        = HubWindow:CreateTab("Duplicate")
 
 local function LoadModule(ModuleName)
     local URL = string.format("https://raw.githubusercontent.com/%s/%s/%s/Modules/%s.lua?t=%s",
@@ -1978,6 +1979,10 @@ Library:Notify("Loaded", "Teleport", 2)
 local LooseObjectTeleportModule = LoadModule("LooseObjectTeleport")
 if LooseObjectTeleportModule and LooseObjectTeleportModule.Init then LooseObjectTeleportModule.Init(ToolTab, Library) end
 Library:Notify("Loaded", "Loose Object Teleport", 2)
+
+local DuplicateModule = LoadModule("Duplicate")
+if DuplicateModule and DuplicateModule.Init then DuplicateModule.Init(DuplicateTab) end
+Library:Notify("Loaded", "Duplicate", 2)
 
 local ShopScript = LoadModule("Shop")
 if ShopScript and ShopScript.Init then ShopScript.Init(ShopTab, LooseObjectTeleportModule) end
