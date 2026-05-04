@@ -1,16 +1,15 @@
 local Duplication = {}
 function Duplication.Init(Tab)
-    local Players      = game:GetService("Players")
-    local RunService   = game:GetService("RunService")
+    local Players           = game:GetService("Players")
+    local RunService        = game:GetService("RunService")
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
-    local LocalPlayer  = Players.LocalPlayer
-    local env          = getgenv and getgenv() or _G
+    local LocalPlayer       = Players.LocalPlayer
+    local env               = getgenv and getgenv() or _G
 
-    env.DupeSource = nil
-    env.DupeTarget = nil
-    env.PM_Connections = env.PM_Connections or {}
-
-    env.DupeItems = {
+    env.DupeSource      = nil
+    env.DupeTarget      = nil
+    env.PM_Connections  = env.PM_Connections or {}
+    env.DupeItems       = {
         Structures = false,
         Wires      = false,
         Furniture  = false,
@@ -18,6 +17,60 @@ function Duplication.Init(Tab)
         Axes       = false,
         Planks     = false,
     }
+
+    -- ===========================
+    -- SAFE RS FINDER
+    -- ===========================
+    local function SafeFind(parent, ...)
+        local cur = parent
+        for _, key in ipairs({...}) do
+            if not cur then return nil end
+            cur = cur:FindFirstChild(key)
+        end
+        return cur
+    end
+
+    -- Try to locate WireObjects and Sawmill type at runtime
+    local function GetWireObject(name)
+        -- Common paths LT2 has used
+        local paths = {
+            {"Purchasables", "WireObjects", name},
+            {"PlaceStructure", "WireObjects", name},
+            {"WireObjects", name},
+        }
+        for _, path in ipairs(paths) do
+            local obj = SafeFind(ReplicatedStorage, table.unpack(path))
+            if obj then return obj end
+        end
+        warn("[Dupe] Could not find WireObject: " .. tostring(name))
+        return nil
+    end
+
+    local function GetSawmillType()
+        local paths = {
+            {"Purchasables", "Structures", "HardStructures", "Sawmill2", "Type"},
+            {"Structures", "HardStructures", "Sawmill2", "Type"},
+        }
+        for _, path in ipairs(paths) do
+            local obj = SafeFind(ReplicatedStorage, table.unpack(path))
+            if obj then return obj end
+        end
+        warn("[Dupe] Could not find Sawmill2.Type")
+        return nil
+    end
+
+    local function GetWireOtherInfo()
+        local paths = {
+            {"Purchasables", "WireObjects", "Wire", "OtherInfo"},
+            {"WireObjects", "Wire", "OtherInfo"},
+        }
+        for _, path in ipairs(paths) do
+            local obj = SafeFind(ReplicatedStorage, table.unpack(path))
+            if obj then return obj end
+        end
+        warn("[Dupe] Could not find Wire.OtherInfo")
+        return nil
+    end
 
     -- ===========================
     -- HELPERS
@@ -32,7 +85,7 @@ function Duplication.Init(Tab)
 
     local function FindPlayer(name)
         for _, p in pairs(Players:GetPlayers()) do
-            if p.Name:find(name) then return p end
+            if p.Name == name or p.Name:find(name) then return p end
         end
     end
 
@@ -45,28 +98,40 @@ function Duplication.Init(Tab)
     end
 
     -- ===========================
-    -- CORE COPY LOGIC
+    -- CORE DUPE LOGIC
     -- ===========================
-    local function ExecuteDupe(sourcePlayerName, targetPlayerName, library)
+    local function ExecuteDupe(sourcePlayerName, destPlayerName, library)
         local SlowMode = false
+        local PS       = ReplicatedStorage.PlaceStructure
 
-        local TargetPlayer = FindPlayer(sourcePlayerName)
-        if not TargetPlayer then
+        -- Resolve source player
+        local SourcePlayer = FindPlayer(sourcePlayerName)
+        if not SourcePlayer then
             warn("[Dupe] Source player not found: " .. tostring(sourcePlayerName))
             if library then library:Notify("Dupe Failed", "Source player not found.", 4) end
             return
         end
 
-        local TargetLand = FindLand(TargetPlayer)
-        local LocalLand  = FindLand(LocalPlayer)
-
-        if not TargetLand or not LocalLand then
-            warn("[Dupe] Could not find land for source or local player.")
-            if library then library:Notify("Dupe Failed", "Could not find plot.", 4) end
+        -- Resolve destination player
+        local DestPlayer = FindPlayer(destPlayerName)
+        if not DestPlayer then
+            warn("[Dupe] Destination player not found: " .. tostring(destPlayerName))
+            if library then library:Notify("Dupe Failed", "Destination player not found.", 4) end
             return
         end
 
-        local PS = ReplicatedStorage.PlaceStructure
+        -- Find plots
+        local SourceLand = FindLand(SourcePlayer)
+        local DestLand   = FindLand(DestPlayer)
+
+        if not SourceLand then
+            if library then library:Notify("Dupe Failed", "Source has no plot.", 4) end
+            warn("[Dupe] No source land found."); return
+        end
+        if not DestLand then
+            if library then library:Notify("Dupe Failed", "Destination has no plot.", 4) end
+            warn("[Dupe] No destination land found."); return
+        end
 
         -- ── STRUCTURES ──────────────────────────────────────────────────
         if env.DupeItems.Structures then
@@ -75,22 +140,21 @@ function Duplication.Init(Tab)
             local TotalBlueprints = 0
 
             for _, v in pairs(workspace.PlayerModels:GetChildren()) do
-                if v:FindFirstChild("Owner") and v.Owner.Value == TargetPlayer then
-                    if v:FindFirstChild("BuildDependentWood")
-                    and (v.Type.Value == "Structure" or v.Type.Value == "Furniture") then
-                        table.insert(CollectedTarget, {
-                            WoodClass     = v:FindFirstChild("BlueprintWoodClass") and v.BlueprintWoodClass.Value,
-                            OffSet        = (v:FindFirstChild("MainCFrame") and v.MainCFrame.Value or v.PrimaryPart.CFrame) - TargetLand.OriginSquare.Position,
-                            BlueprintType = v.ItemName.Value,
-                        })
-                    end
+                if v:FindFirstChild("Owner") and v.Owner.Value == SourcePlayer
+                and v:FindFirstChild("BuildDependentWood")
+                and (v.Type and (v.Type.Value == "Structure" or v.Type.Value == "Furniture")) then
+                    table.insert(CollectedTarget, {
+                        WoodClass     = v:FindFirstChild("BlueprintWoodClass") and v.BlueprintWoodClass.Value,
+                        OffSet        = (v:FindFirstChild("MainCFrame") and v.MainCFrame.Value or v.PrimaryPart.CFrame) - SourceLand.OriginSquare.Position,
+                        BlueprintType = v.ItemName.Value,
+                    })
                 end
             end
 
             for _, Data in pairs(CollectedTarget) do
                 PS.ClientPlacedBlueprint:FireServer(
                     Data.BlueprintType,
-                    LocalLand.OriginSquare.CFrame - Vector3.new(0, 20, 0),
+                    DestLand.OriginSquare.CFrame - Vector3.new(0, 20, 0),
                     LocalPlayer
                 )
                 if SlowMode and math.random(1, 2) ~= 1 then RunService.RenderStepped:Wait() end
@@ -112,7 +176,7 @@ function Duplication.Init(Tab)
                     and not blueprintCollected(v) then
                         CollectedLocal[v.Name] = CollectedLocal[v.Name] or {}
                         table.insert(CollectedLocal[v.Name], v)
-                        TotalBlueprints = TotalBlueprints + 1
+                        TotalBlueprints += 1
                     end
                 end
                 task.wait()
@@ -122,7 +186,7 @@ function Duplication.Init(Tab)
                 local bp = CollectedLocal[Data.BlueprintType] and CollectedLocal[Data.BlueprintType][1]
                 if bp then
                     table.remove(CollectedLocal[Data.BlueprintType], 1)
-                    local pos = Data.OffSet + LocalLand.OriginSquare.Position
+                    local pos = Data.OffSet + DestLand.OriginSquare.Position
                     PS.ClientPlacedStructure:FireServer(
                         bp.ItemName.Value, pos, LocalPlayer, Data.WoodClass, bp, not Data.WoodClass
                     )
@@ -134,24 +198,25 @@ function Duplication.Init(Tab)
         -- ── WIRES ────────────────────────────────────────────────────────
         if env.DupeItems.Wires then
             for _, v in pairs(workspace.PlayerModels:GetChildren()) do
-                if v:FindFirstChild("Owner") and v.Owner.Value == TargetPlayer
+                if v:FindFirstChild("Owner") and v.Owner.Value == SourcePlayer
                 and v:FindFirstChild("Type") and v.Type.Value == "Wire"
                 and v:FindFirstChild("End1") then
-                    local Points    = { v.End1.Position - TargetLand.OriginSquare.Position }
+                    local Points    = { v.End1.Position - SourceLand.OriginSquare.Position }
                     local pointCount = 1
                     for _, w in pairs(v:GetChildren()) do
                         if w.Name:find("Point") then pointCount += 1 end
                     end
                     for i = 2, pointCount do
                         local pt = v:FindFirstChild("Point" .. i)
-                        if pt then table.insert(Points, pt.Position - TargetLand.OriginSquare.Position) end
+                        if pt then table.insert(Points, pt.Position - SourceLand.OriginSquare.Position) end
                     end
-                    table.insert(Points, v.End2.Position - TargetLand.OriginSquare.Position)
+                    table.insert(Points, v.End2.Position - SourceLand.OriginSquare.Position)
+                    for i, p in pairs(Points) do Points[i] = p + DestLand.OriginSquare.Position end
 
-                    for i, p in pairs(Points) do Points[i] = p + LocalLand.OriginSquare.Position end
-                    PS.ClientPlacedWire:FireServer(
-                        ReplicatedStorage.Purchasables.WireObjects[v.ItemName.Value], Points
-                    )
+                    local wireObj = GetWireObject(v.ItemName.Value)
+                    if wireObj then
+                        PS.ClientPlacedWire:FireServer(wireObj, Points)
+                    end
                     if SlowMode and math.random(1, 2) ~= 1 then RunService.RenderStepped:Wait() end
                 end
             end
@@ -159,6 +224,9 @@ function Duplication.Init(Tab)
 
         -- ── FURNITURE ────────────────────────────────────────────────────
         if env.DupeItems.Furniture then
+            local sawType   = GetSawmillType()
+            local wireOther = GetWireOtherInfo()
+
             local function isValidFurniture(m)
                 if m:FindFirstChild("Type")
                 and (m.Type.Value == "Structure" or m.Type.Value == "Furniture" or m.Type.Value == "Vehicle Spot") then
@@ -168,12 +236,11 @@ function Duplication.Init(Tab)
             end
 
             local function spawnWireItem(itemName, position)
+                if not sawType or not wireOther then return end
                 local info = {
-                    Name  = itemName.Value,
-                    Type  = itemName.Name == "PurchasedBoxItemName"
-                            and itemName
-                            or  ReplicatedStorage.Purchasables.Structures.HardStructures.Sawmill2.Type,
-                    OtherInfo = ReplicatedStorage.Purchasables.WireObjects.Wire.OtherInfo,
+                    Name      = itemName.Value,
+                    Type      = itemName.Name == "PurchasedBoxItemName" and itemName or sawType,
+                    OtherInfo = wireOther,
                 }
                 PS.ClientPlacedWire:FireServer(info, { position.p, position.p })
             end
@@ -182,13 +249,13 @@ function Duplication.Init(Tab)
             local CollectedLocal  = {}
 
             for _, m in pairs(workspace.PlayerModels:GetChildren()) do
-                if m:FindFirstChild("Owner") and m.Owner.Value == TargetPlayer and isValidFurniture(m) then
+                if m:FindFirstChild("Owner") and m.Owner.Value == SourcePlayer and isValidFurniture(m) then
                     local itemName = m:FindFirstChild("ItemName") or m:FindFirstChild("PurchasedBoxItemName")
-                    local offset   = (m:FindFirstChild("MainCFrame") and m.MainCFrame.Value or m.PrimaryPart.CFrame) - TargetLand.OriginSquare.Position
+                    local offset   = (m:FindFirstChild("MainCFrame") and m.MainCFrame.Value or m.PrimaryPart.CFrame) - SourceLand.OriginSquare.Position
                     if itemName.Name == "PurchasedBoxItemName" then
-                        spawnWireItem(itemName, offset + LocalLand.OriginSquare.Position)
+                        spawnWireItem(itemName, offset + DestLand.OriginSquare.Position)
                     else
-                        spawnWireItem(itemName, LocalLand.OriginSquare.CFrame - Vector3.new(0, 20, 0))
+                        spawnWireItem(itemName, DestLand.OriginSquare.CFrame - Vector3.new(0, 20, 0))
                     end
                     table.insert(CollectedTarget, { ItemName = itemName.Value, OffSet = offset })
                     if SlowMode and math.random(1, 2) ~= 1 then RunService.RenderStepped:Wait() end
@@ -227,7 +294,7 @@ function Duplication.Init(Tab)
             for _, d in pairs(CollectedTarget) do
                 local model = grabFurniture(d.ItemName)
                 if model then
-                    local pos = d.OffSet + LocalLand.OriginSquare.Position
+                    local pos = d.OffSet + DestLand.OriginSquare.Position
                     PS.ClientPlacedStructure:FireServer(d.ItemName, pos, LocalPlayer, false, model, true)
                     if SlowMode and math.random(1, 2) ~= 1 then RunService.RenderStepped:Wait() end
                 end
@@ -235,9 +302,10 @@ function Duplication.Init(Tab)
         end
 
         -- ── LOOSE ITEMS (Gifts / Axes / Planks) ─────────────────────────
-        local copyLoose = env.DupeItems.Gifts or env.DupeItems.Axes or env.DupeItems.Planks
+        if env.DupeItems.Gifts or env.DupeItems.Axes or env.DupeItems.Planks then
+            local sawType   = GetSawmillType()
+            local wireOther = GetWireOtherInfo()
 
-        if copyLoose then
             local function isValidItem(m)
                 if m:FindFirstChild("Type") then
                     local t = m.Type.Value
@@ -249,27 +317,22 @@ function Duplication.Init(Tab)
             end
 
             local function itemOnLand(pos)
-                if math.abs(pos.X - TargetLand.OriginSquare.Position.X) > 101
-                or math.abs(pos.Z - TargetLand.OriginSquare.Position.Z) > 101 then
-                    return false
-                end
-                for _, sq in pairs(TargetLand:GetChildren()) do
+                if math.abs(pos.X - SourceLand.OriginSquare.Position.X) > 101
+                or math.abs(pos.Z - SourceLand.OriginSquare.Position.Z) > 101 then return false end
+                for _, sq in pairs(SourceLand:GetChildren()) do
                     if sq.Name == "Square"
                     and math.abs(pos.X - sq.Position.X) < 21
-                    and math.abs(pos.Z - sq.Position.Z) < 21 then
-                        return true
-                    end
+                    and math.abs(pos.Z - sq.Position.Z) < 21 then return true end
                 end
                 return false
             end
 
             local function spawnLoose(itemName, position)
+                if not sawType or not wireOther then return end
                 local info = {
                     Name      = itemName.Value,
-                    Type      = itemName.Name == "PurchasedBoxItemName"
-                                and itemName
-                                or  ReplicatedStorage.Purchasables.Structures.HardStructures.Sawmill2.Type,
-                    OtherInfo = ReplicatedStorage.Purchasables.WireObjects.Wire.OtherInfo,
+                    Type      = itemName.Name == "PurchasedBoxItemName" and itemName or sawType,
+                    OtherInfo = wireOther,
                 }
                 PS.ClientPlacedWire:FireServer(info, { position.p, position.p })
             end
@@ -278,23 +341,19 @@ function Duplication.Init(Tab)
             local CollectedLocal  = {}
 
             for _, m in pairs(workspace.PlayerModels:GetChildren()) do
-                if m:FindFirstChild("Owner") and m.Owner.Value == TargetPlayer and isValidItem(m) then
+                if m:FindFirstChild("Owner") and m.Owner.Value == SourcePlayer and isValidItem(m) then
                     local itemName = m:FindFirstChild("ItemName") or m:FindFirstChild("PurchasedBoxItemName")
                     local cf       = m:FindFirstChild("MainCFrame") and m.MainCFrame.Value or m.PrimaryPart.CFrame
+                    local iname    = (itemName and itemName.Value or ""):lower()
 
-                    -- Filter by toggle
-                    local iname = (itemName and itemName.Value or ""):lower()
                     local include = false
                     if env.DupeItems.Gifts  and m:FindFirstChild("Type") and m.Type.Value == "Gift" then include = true end
-                    if env.DupeItems.Axes   and iname:find("axe") then include = true end
+                    if env.DupeItems.Axes   and iname:find("axe")   then include = true end
                     if env.DupeItems.Planks and (iname:find("plank") or iname:find("wood")) then include = true end
 
                     if include and itemOnLand(cf.p) then
-                        spawnLoose(itemName, LocalLand.OriginSquare.CFrame - Vector3.new(0, 20, 0))
-                        table.insert(CollectedTarget, {
-                            ItemName = itemName.Value,
-                            OffSet   = cf - TargetLand.OriginSquare.Position,
-                        })
+                        spawnLoose(itemName, DestLand.OriginSquare.CFrame - Vector3.new(0, 20, 0))
+                        table.insert(CollectedTarget, { ItemName = itemName.Value, OffSet = cf - SourceLand.OriginSquare.Position })
                         if SlowMode and math.random(1, 2) ~= 1 then RunService.RenderStepped:Wait() end
                     end
                 end
@@ -305,9 +364,7 @@ function Duplication.Init(Tab)
 
             local function needsItem(model)
                 for i, d in pairs(remaining) do
-                    if d.ItemName == model.ItemName.Value then
-                        table.remove(remaining, i); return true
-                    end
+                    if d.ItemName == model.ItemName.Value then table.remove(remaining, i); return true end
                 end
                 return false
             end
@@ -333,7 +390,7 @@ function Duplication.Init(Tab)
             for _, d in pairs(CollectedTarget) do
                 local model = grabItem(d.ItemName)
                 if model then
-                    local pos = d.OffSet + LocalLand.OriginSquare.Position
+                    local pos = d.OffSet + DestLand.OriginSquare.Position
                     if model:FindFirstChild("PurchasedBoxItemName") then
                         PS.ClientPlacedStructure:FireServer(false, pos, false, false, model)
                         model.Parent = nil
@@ -345,7 +402,7 @@ function Duplication.Init(Tab)
             end
         end
 
-        if library then library:Notify("Duplication", "Finished copying plot!", 5) end
+        if library then library:Notify("Duplication", "Finished!", 5) end
         print("[Dupe] Finished!")
     end
 
@@ -354,12 +411,11 @@ function Duplication.Init(Tab)
     -- ===========================
     Tab:CreateSection("BASE DUPLICATION")
 
-    local SourceDropdown = Tab:CreateDropdown("Source Plot (Copy From):", GetPlayerNames(), GetPlayerNames()[1], function(selected)
-        env.DupeSource = selected
+    local SourceDropdown = Tab:CreateDropdown("Copy From (Source):", GetPlayerNames(), GetPlayerNames()[1], function(s)
+        env.DupeSource = s
     end)
-
-    local TargetDropdown = Tab:CreateDropdown("Target Plot (Copy To):", GetPlayerNames(), GetPlayerNames()[1], function(selected)
-        env.DupeTarget = selected
+    local TargetDropdown = Tab:CreateDropdown("Copy To (Destination):", GetPlayerNames(), GetPlayerNames()[1], function(s)
+        env.DupeTarget = s
     end)
 
     local function RefreshLists()
@@ -367,7 +423,6 @@ function Duplication.Init(Tab)
         SourceDropdown:SetOptions(names)
         TargetDropdown:SetOptions(names)
     end
-
     table.insert(env.PM_Connections, Players.PlayerAdded:Connect(RefreshLists))
     table.insert(env.PM_Connections, Players.PlayerRemoving:Connect(RefreshLists))
 
@@ -376,23 +431,20 @@ function Duplication.Init(Tab)
 
     StartButton = Tab:CreateAction("Duplicate Base", "Start", function()
         if isProcessing then return end
-
         if not env.DupeSource or not env.DupeTarget then
-            warn("[Dupe] Select a Source and Target first!")
+            warn("[Dupe] Select Source and Destination first!")
             return
         end
-
         isProcessing = true
         StartButton:SetDisabled(true)
         StartButton:SetText("Running...")
-
         task.spawn(function()
             ExecuteDupe(env.DupeSource, env.DupeTarget)
             isProcessing = false
             StartButton:SetDisabled(false)
             StartButton:SetText("Start")
         end)
-    end, true) -- Secure = true so it asks for confirmation
+    end, true)
 
     Tab:CreateSection("OBJECTS TO DUPLICATE")
     Tab:CreateToggle("Structures & Blueprints", false, function(s) env.DupeItems.Structures = s end)
