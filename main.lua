@@ -33,7 +33,7 @@ task.spawn(function()
     end
 end)
 
---loadstring(game:HttpGet("https://raw.githubusercontent.com/learnhtsd/lt2/refs/heads/main/main.lua"))()
+--loadstring(game:HttpGet("https://raw.githubusercontent.com/learnhtsd/DynxeLT2/refs/heads/main/main.lua"))()
 
 -- ██████╗  ██████╗ ███╗   ██╗███████╗██╗ ██████╗
 -- ██╔════╝ ██╔═══██╗████╗  ██║██╔════╝██║██╔════╝
