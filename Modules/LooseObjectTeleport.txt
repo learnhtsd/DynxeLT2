@@ -1,0 +1,304 @@
+# LooseObjectTeleport
+
+A Lua module for the **Dynxe LT2 UI Engine** that lets you grab network ownership of unanchored world objects and teleport them to any position — individually, in bulk, or in a structured grid stack. Designed for Lumber Tycoon 2-style games where items are loose `BasePart`-backed models sitting in `workspace`.
+
+---
+
+## Table of Contents
+
+- [How It Works](#how-it-works)
+- [Installation](#installation)
+- [UI Controls](#ui-controls)
+  - [Item Teleportation](#item-teleportation)
+  - [Stack Teleport](#stack-teleport)
+- [Public API](#public-api)
+  - [Select / Deselect / Clear](#select--deselect--clear)
+  - [TeleportTo](#teleportto)
+  - [TeleportObjectTo](#teleportobjectto)
+  - [TeleportMany](#teleportmany)
+  - [IsBusy / GetQueueSize](#isbusy--getqueuesize)
+- [Integrating with Other Modules](#integrating-with-other-modules)
+- [Configuration Reference](#configuration-reference)
+- [Internal Architecture](#internal-architecture)
+  - [Ownership Acquisition](#ownership-acquisition)
+  - [Batch Runner](#batch-runner)
+  - [Character Ghosting](#character-ghosting)
+- [Expected World Structure](#expected-world-structure)
+
+---
+
+## How It Works
+
+Roblox's physics system grants **network ownership** of an unanchored part to whichever client is closest and interacting with it. To move a part server-authoritatively from the client, you need to:
+
+1. Get close to the part
+2. Pick it up (simulate a mouse hold) so the server grants you ownership
+3. Write its `CFrame` while ownership is held
+4. Release cleanly so the server records your final position
+
+`LooseObjectTeleport` automates this entire sequence. It positions your character above the target, locks the camera, simulates a mouse press, polls for ownership confirmation, writes the target `CFrame` in a heartbeat loop, then releases and anchors the part briefly so physics can settle before it goes live again.
+
+---
+
+## Installation
+
+Load the module from your GitHub raw URL using your existing `LoadModule` helper, then call `Init` with the tab and library reference:
+
+```lua
+local LooseObjectTeleportModule = LoadModule("LooseObjectTeleport")
+if LooseObjectTeleportModule and LooseObjectTeleportModule.Init then
+    LooseObjectTeleportModule.Init(ToolTab, Library)
+end
+```
+
+To pass it to another module (e.g. a shop script):
+
+```lua
+local ShopScript = LoadModule("Shop")
+if ShopScript and ShopScript.Init then
+    ShopScript.Init(ShopTab, LooseObjectTeleportModule)
+end
+```
+
+---
+
+## UI Controls
+
+### Item Teleportation
+
+| Control | Description |
+|---|---|
+| **Click Selection** toggle | When on, left-clicking an object in the world adds or removes it from the queue. Click it again to deselect. |
+| **Group Selection** toggle | When on, left-clicking an object selects every object of the same type, name, and owner in `workspace.PlayerModels`. |
+| **Lasso Tool** toggle | Click and drag a rectangle on screen to select all objects whose `Main` part falls inside it. Drag over already-selected objects to deselect them. |
+| **Max Retries** slider | How many times the module attempts to grab network ownership per object before giving up. Default: 5. |
+| **Clear** button | Empties the selection queue and cancels any running batch. |
+| **Execute** button | Teleports every queued object to your character's current position. All objects share the same target position but keep their original rotation. |
+
+### Stack Teleport
+
+Arranges the queued objects into a 3D grid at a cursor-chosen location. All items in the queue must be the **same type** (same model name and structure).
+
+| Control | Description |
+|---|---|
+| **Stack X** slider | Number of columns (left/right). |
+| **Stack Y** slider | Number of layers (bottom to top). |
+| **Stack Z** slider | Number of rows (front/back). |
+| **Item Padding** slider | Gap in studs between each item. `0` = flush, `0.5` = half a stud apart. |
+| **Start Stack** button | Enters placement mode. A ghost preview follows your cursor. Click anywhere in the world to confirm placement. Click **Stop Stack** to cancel. |
+
+**Keyboard shortcuts during placement:**
+
+| Key | Action |
+|---|---|
+| `R` | Rotate the stack +90° on the X axis |
+| `T` | Rotate the stack +90° on the Y axis |
+
+The grid capacity must be at least as large as the number of queued items (`X × Y × Z ≥ queue size`) or placement will be blocked.
+
+---
+
+## Public API
+
+Other modules can drive the teleporter programmatically without touching the UI. All API methods are safe to call from any thread. Every method that starts a teleport returns `true` on success or `false` if the batch was cancelled or LOT was busy.
+
+### Select / Deselect / Clear
+
+```lua
+-- Add a BasePart to the persistent selection queue.
+-- Silently ignored if the part is already queued or a batch is running.
+LooseObjectTeleport.Select(part: BasePart)
+
+-- Remove a BasePart from the selection queue.
+LooseObjectTeleport.Deselect(part: BasePart)
+
+-- Empty the entire queue and cancel any running batch.
+-- Equivalent to pressing the Clear button in the UI.
+LooseObjectTeleport.Clear()
+```
+
+### TeleportTo
+
+Teleports every part currently in the queue to a single `CFrame`, then clears the queue.
+
+```lua
+-- goalCF — the destination CFrame (position + optional rotation)
+-- Returns true on success, false if cancelled or queue was empty.
+LooseObjectTeleport.TeleportTo(goalCF: CFrame): boolean
+```
+
+Example — teleport everything in the queue to a fixed world position:
+
+```lua
+LooseObjectTeleport.TeleportTo(CFrame.new(100, 5, 200))
+```
+
+### TeleportObjectTo
+
+Teleports a single `BasePart` to a given `CFrame` without touching the selection queue. The most convenient method for "buy item → deliver to player" flows.
+
+```lua
+-- part   — the BasePart (typically the "Main" part of a model)
+-- goalCF — destination CFrame
+-- Returns true on success, false if cancelled or LOT was busy.
+LooseObjectTeleport.TeleportObjectTo(part: BasePart, goalCF: CFrame): boolean
+```
+
+Example:
+
+```lua
+local dropCF = root.CFrame * CFrame.new(0, 0, -5)
+LooseObjectTeleport.TeleportObjectTo(itemPart, dropCF)
+```
+
+### TeleportMany
+
+Teleports multiple parts, each to its own individual `CFrame`. Use this when items should land at different positions (e.g. fanned out in a row, or placed into a grid computed by your own code).
+
+```lua
+-- jobs — array of { target = BasePart, goalCF = CFrame }
+-- Returns true on success, false if cancelled or LOT was busy.
+LooseObjectTeleport.TeleportMany(jobs: { { target: BasePart, goalCF: CFrame } }): boolean
+```
+
+Example — fan 3 items out in front of the player:
+
+```lua
+LooseObjectTeleport.TeleportMany({
+    { target = partA, goalCF = CFrame.new(10, 1,  0) },
+    { target = partB, goalCF = CFrame.new(15, 1,  0) },
+    { target = partC, goalCF = CFrame.new(20, 1,  0) },
+})
+```
+
+### IsBusy / GetQueueSize
+
+Read-only helpers for checking state before making API calls.
+
+```lua
+-- Returns true while any batch teleport is in progress.
+LooseObjectTeleport.IsBusy(): boolean
+
+-- Returns the number of parts currently in the selection queue.
+LooseObjectTeleport.GetQueueSize(): number
+```
+
+Always guard API calls that start a teleport:
+
+```lua
+if not LooseObjectTeleport.IsBusy() then
+    LooseObjectTeleport.TeleportObjectTo(part, goalCF)
+end
+```
+
+---
+
+## Integrating with Other Modules
+
+Pass the already-initialised `LooseObjectTeleportModule` variable into any module that needs it:
+
+```lua
+-- main loader
+local LooseObjectTeleportModule = LoadModule("LooseObjectTeleport")
+LooseObjectTeleportModule.Init(ToolTab, Library)
+
+local ShopScript = LoadModule("Shop")
+ShopScript.Init(ShopTab, LooseObjectTeleportModule)
+```
+
+Inside the receiving module, store the reference and call it directly:
+
+```lua
+-- Shop.lua
+function ShopModule.Init(Tab, LOT)
+    -- ...
+    local PurchaseBtn = Tab:CreateAction("Buy", "$0", function()
+        if LOT.IsBusy() then return end
+
+        local parts = FindItemsInWorld(selectedItem, quantity)
+        local jobs  = {}
+        for i, part in ipairs(parts) do
+            jobs[i] = { target = part, goalCF = ComputeDropPosition(i) }
+        end
+
+        task.spawn(LOT.TeleportMany, jobs)
+    end)
+end
+```
+
+`task.spawn` is recommended when calling teleport methods from UI callbacks so the button doesn't block while the batch runs.
+
+---
+
+## Configuration Reference
+
+All settings live in the `Settings` table at the top of the module. Edit them directly before calling `Init`.
+
+| Setting | Default | Description |
+|---|---|---|
+| `PreClickDelay` | `0.08` | Seconds to wait after positioning the character before simulating the mouse press. |
+| `BetweenRetryDelay` | `0.05` | Seconds between ownership-grab retries. |
+| `PostSyncDelay` | `0.05` | Seconds to hold the CFrame lock after the mouse press while ownership is confirmed. |
+| `CFrameNudgeDelay` | `0.05` | Seconds for each of the post-release CFrame nudge passes. |
+| `PostGrabDelay` | `0.1` | Seconds to wait after each individual item before processing the next. |
+| `PostBatchDelay` | `0.01` | Seconds to wait after all items before restoring the character. |
+| `OwnershipMoveThreshold` | `0.05` | Minimum studs the part must move from its start position before ownership is considered confirmed. |
+| `OwnershipTimeout` | `2` | Maximum seconds to wait for ownership per attempt before retrying. |
+| `MaxRetries` | `5` | Maximum grab attempts per object (also exposed as a UI slider). |
+| `GapDistance` | `6` | Studs above the object the character hovers while grabbing. |
+| `CleanRadius` | `12` | Radius in studs around the object to temporarily remove obstructing parts during the grab. |
+| `LockMouseMovement` | `true` | Whether to lock the camera to face the object during each grab. |
+| `SelectionColor` | Blue | Color of the `SelectionBox` outlines drawn around queued objects. |
+| `OutlineThickness` | `0.02` | Thickness of the selection box outlines. |
+| `StackX/Y/Z` | `1/5/1` | Default stack grid dimensions. |
+| `StackPadding` | `0.05` | Default gap between stacked items in studs. |
+
+---
+
+## Internal Architecture
+
+### Ownership Acquisition
+
+The core loop in `GrabAndTeleport`:
+
+1. The part is temporarily parented to `nil` (removed from the world) so nothing else can interact with it while the character repositions.
+2. Nearby obstructing parts within `CleanRadius` are also parented to `nil` temporarily so the character can hover cleanly.
+3. The character is locked above the part via a `Heartbeat` connection while the camera looks at it.
+4. `mouse1press()` is called to simulate a hold. `WaitForOwnership` polls the part's position — any movement greater than `OwnershipMoveThreshold` confirms the server granted ownership.
+5. If ownership is not confirmed within `OwnershipTimeout`, the mouse is released and the attempt retries up to `MaxRetries` times.
+6. Once ownership is confirmed, the mouse stays held. A `Heartbeat` loop writes the goal `CFrame` and zeroes velocity for `PostSyncDelay` seconds while the server records the authoritative position.
+7. The mouse is released. A second `Heartbeat` lock runs for `CFrameNudgeDelay` seconds to beat any in-flight server correction.
+8. A micro-nudge (+0.05 studs, then back) coaxes a clean physics settle.
+9. The part is anchored for 2 seconds so physics fully settles before it goes live again.
+
+### Batch Runner
+
+`RunBatch(jobs)` is the single internal function all teleport paths use — both the UI buttons and the public API. It:
+
+- Raises `State.IsBusy` so UI clicks are silenced during the run
+- Sets up character ghosting and `PlatformStand` once for the whole batch
+- Pulls all job targets out of the world (`Parent = nil`) before starting, so no stray physics interactions occur between items
+- Calls `GrabAndTeleport` for each job in sequence
+- Calls `RestoreCharacterAfterBatch` to snap the character back to its original `CFrame`, un-ghost it, and re-enable humanoid physics
+- Returns `true` if all jobs completed, `false` if `State.BatchCancelled` was set (e.g. by pressing Clear mid-batch)
+
+### Character Ghosting
+
+During any batch, the character is made invisible and non-collidable via `SetCharacterGhosting`. A `Heartbeat` connection (`ghostLock`) continuously re-enforces `CanCollide = false` on every descendant because Roblox's `Humanoid` can silently reset collision between physics steps. The lock is disconnected as the very first step of `RestoreCharacterAfterBatch` before `PlatformStand` is toggled off, ensuring physics re-engages at the safe, original `CFrame` rather than wherever the character drifted.
+
+---
+
+## Expected World Structure
+
+The selection and group-select tools search `workspace.PlayerModels` for owned items:
+
+```
+workspace
+ └─ PlayerModels
+     └─ [ItemModel]          — Model
+         ├─ Main             — BasePart (unanchored) ← LOT grabs this
+         ├─ Owner            — value
+         └─ TreeClass        — value (optional, used for group-select matching)
+```
+
+The lasso tool uses the same structure. For shop integration, items are sourced from a separate store folder — see your `ShopModule` for that path configuration.
