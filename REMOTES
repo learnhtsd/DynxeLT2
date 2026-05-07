@@ -1,0 +1,13 @@
+game.ReplicatedStorage.Interaction.RemoteProxy:FireServer(SpawnPad.ButtonRemote_SpawnButton)
+game.ReplicatedStorage.Interaction.ClientIsWhitelisted:InvokeServer(Owner)
+game.ReplicatedStorage.Interaction.ClientIsWhitelisted:InvokeServer(SpawnPad.Owner.Value)
+game.ReplicatedStorage.Interaction.ClientIsDragging:FireServer(Car.Main)
+game.ReplicatedStorage.Interaction.Verify:FireServer('Item owned by player',Tree)
+game.ReplicatedStorage.Interaction.RemoteProxy:FireServer(TreePart.Parent.CutEvent, CutArguments)
+game.ReplicatedStorage.Interaction.DestroyStructure:FireServer(Thing.Parent)
+game.ReplicatedStorage.Interaction.ClientInteracted:FireServer(b, "Drop tool", game.Players.LocalPlayer.Character.Head.CFrame)
+game.ReplicatedStorage.Interaction.InteractionPermission
+
+
+
+
